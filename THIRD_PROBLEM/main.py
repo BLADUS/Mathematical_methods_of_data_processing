@@ -2,57 +2,55 @@ import numpy as np
 
 def solve_heat_equation(a, b, f_func, T, h, left_bc, right_bc, initial_cond):
     # Параметры сетки
-    x_points = np.arange(0, 1 + h, h)
+    x_points = np.linspace(0, 1, int(1 / h) + 1)
     Nx = len(x_points) - 1
-    
-    # Выбираем шаг по времени с учетом устойчивости
-    tau = min(h**2 / (4 * a), 0.01)
+
+    # Увеличиваем шаг по времени для заметного изменения
+    tau = h  # Используем h вместо h² / (4a) для ускорения
     Nt = int(T / tau) + 1
-    Nt = min(Nt, 10000)
-    
+
     # Инициализация сетки
     u = np.zeros((Nt, Nx + 1))
     
     # Начальное условие
     for i in range(Nx + 1):
-        x = i * h
-        u[0, i] = initial_cond(x)
+        u[0, i] = initial_cond(x_points[i])
     
     # Коэффициенты
     alpha = a * tau / h**2
     beta = b * tau
-    
-    # Матрица коэффициентов
-    A = np.zeros((Nx - 1, Nx - 1))
-    for i in range(Nx - 1):
+
+    # Матрица коэффициентов (трехдиагональная)
+    size = Nx - 1
+    A = np.zeros((size, size))
+    for i in range(size):
         A[i, i] = 1 + 2 * alpha + beta
         if i > 0:
             A[i, i - 1] = -alpha
-        if i < Nx - 2:
+        if i < size - 1:
             A[i, i + 1] = -alpha
-    
+
     # Временные слои
     for n in range(Nt - 1):
         t = n * tau
-        next_t = (n + 1) * tau
-        
-        # Правая часть
-        F = np.zeros(Nx - 1)
+
+        # Правая часть (учитываем f(x, t))
+        F = np.zeros(size)
         for i in range(1, Nx):
-            x = i * h
+            x = x_points[i]
             F[i - 1] = u[n, i] + tau * f_func(x, t)
-        
+
         # Граничные условия
-        F[0] += alpha * left_bc(next_t)
-        F[-1] += alpha * right_bc(next_t)
-        
+        F[0] += alpha * left_bc(t + tau)
+        F[-1] += alpha * right_bc(t + tau)
+
         # Решение системы
         u[n + 1, 1:Nx] = np.linalg.solve(A, F)
-        
-        # Границы
-        u[n + 1, 0] = left_bc(next_t)
-        u[n + 1, Nx] = right_bc(next_t)
-    
+
+        # Явно задаем границы (важно!)
+        u[n + 1, 0] = left_bc(t + tau)
+        u[n + 1, -1] = right_bc(t + tau)
+
     return x_points, np.linspace(0, T, Nt), u
 
 def read_problem_file(filename):
